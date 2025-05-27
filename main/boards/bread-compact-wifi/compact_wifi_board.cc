@@ -35,19 +35,22 @@ private:
     Button volume_up_button_;
     Button volume_down_button_;
 
+    // 初始化I2C显示总线
     void InitializeDisplayI2c() {
+        // 定义I2C总线配置
         i2c_master_bus_config_t bus_config = {
-            .i2c_port = (i2c_port_t)0,
-            .sda_io_num = DISPLAY_SDA_PIN,
-            .scl_io_num = DISPLAY_SCL_PIN,
-            .clk_source = I2C_CLK_SRC_DEFAULT,
-            .glitch_ignore_cnt = 7,
-            .intr_priority = 0,
-            .trans_queue_depth = 0,
+            .i2c_port = (i2c_port_t)0, // I2C端口
+            .sda_io_num = DISPLAY_SDA_PIN, // SDA引脚
+            .scl_io_num = DISPLAY_SCL_PIN, // SCL引脚
+            .clk_source = I2C_CLK_SRC_DEFAULT, // 时钟源
+            .glitch_ignore_cnt = 7, // 误差忽略计数
+            .intr_priority = 0, // 中断优先级
+            .trans_queue_depth = 0, // 传输队列深度
             .flags = {
-                .enable_internal_pullup = 1,
+                .enable_internal_pullup = 1, // 启用内部上拉
             },
         };
+        // 创建新的I2C主总线
         ESP_ERROR_CHECK(i2c_new_master_bus(&bus_config, &display_i2c_bus_));
     }
 

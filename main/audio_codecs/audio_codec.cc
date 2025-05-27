@@ -14,15 +14,20 @@ AudioCodec::AudioCodec() {
 AudioCodec::~AudioCodec() {
 }
 
+// 输出音频数据
 void AudioCodec::OutputData(std::vector<int16_t>& data) {
+    // 将数据写入输出流
     Write(data.data(), data.size());
 }
 
 bool AudioCodec::InputData(std::vector<int16_t>& data) {
+    // 读取数据
     int samples = Read(data.data(), data.size());
+    // 如果读取到的样本数大于0，则返回true
     if (samples > 0) {
         return true;
     }
+    // 否则返回false
     return false;
 }
 

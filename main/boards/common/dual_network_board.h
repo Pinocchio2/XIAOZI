@@ -17,6 +17,7 @@ class DualNetworkBoard : public Board {
 private:
     // 使用基类指针存储当前活动的板卡
     std::unique_ptr<Board> current_board_;
+    // 当前网络类型，默认为ML307
     NetworkType network_type_ = NetworkType::ML307;  // Default to ML307
 
     // ML307的引脚配置

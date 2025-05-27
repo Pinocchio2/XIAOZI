@@ -16,11 +16,17 @@ public:
     void SetHeader(const std::string& key, const std::string& value);
     bool CheckVersion();
     esp_err_t Activate();
+    // 判断是否有激活挑战
     bool HasActivationChallenge() { return has_activation_challenge_; }
+    // 检查是否有新版本
     bool HasNewVersion() { return has_new_version_; }
+    // 检查是否已经配置了MQTT
     bool HasMqttConfig() { return has_mqtt_config_; }
+    // 检查是否有websocket配置
     bool HasWebsocketConfig() { return has_websocket_config_; }
+    // 检查是否有激活码
     bool HasActivationCode() { return has_activation_code_; }
+    // 返回是否有服务器时间
     bool HasServerTime() { return has_server_time_; }
     void StartUpgrade(std::function<void(int progress, size_t speed)> callback);
     void MarkCurrentVersionValid();

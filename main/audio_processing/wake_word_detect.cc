@@ -10,35 +10,44 @@
 
 static const char* TAG = "WakeWordDetect";
 
+// 构造函数
 WakeWordDetect::WakeWordDetect()
-    : afe_data_(nullptr),
-      wake_word_pcm_(),
-      wake_word_opus_() {
+    : afe_data_(nullptr), // 初始化AFE数据指针为空
+      wake_word_pcm_(), // 初始化唤醒词PCM数据
+      wake_word_opus_() { // 初始化唤醒词OPUS数据
 
-    event_group_ = xEventGroupCreate();
+    event_group_ = xEventGroupCreate(); // 创建事件组
 }
 
 WakeWordDetect::~WakeWordDetect() {
+    // 如果afe_data_不为空，则销毁afe_data_
     if (afe_data_ != nullptr) {
         afe_iface_->destroy(afe_data_);
     }
 
+    // 如果wake_word_encode_task_stack_不为空，则释放wake_word_encode_task_stack_的内存
     if (wake_word_encode_task_stack_ != nullptr) {
         heap_caps_free(wake_word_encode_task_stack_);
     }
 
+    // 删除event_group_
     vEventGroupDelete(event_group_);
 }
 
 void WakeWordDetect::Initialize(AudioCodec* codec) {
+    // 初始化音频编解码器
     codec_ = codec;
+    // 获取输入参考通道数
     int ref_num = codec_->input_reference() ? 1 : 0;
 
+    // 初始化唤醒词模型
     srmodel_list_t *models = esp_srmodel_init("model");
     for (int i = 0; i < models->num; i++) {
         ESP_LOGI(TAG, "Model %d: %s", i, models->model_name[i]);
+        // 判断模型名称是否包含唤醒词前缀
         if (strstr(models->model_name[i], ESP_WN_PREFIX) != NULL) {
             wakenet_model_ = models->model_name[i];
+            // 获取唤醒词
             auto words = esp_srmodel_get_wake_words(models, wakenet_model_);
             // split by ";" to get all wake words
             std::stringstream ss(words);
