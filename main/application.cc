@@ -103,6 +103,20 @@ Application::~Application() {
     vEventGroupDelete(event_group_);
 }
 
+/*
+该函数 `Application::CheckNewVersion()` 的主要功能是检查设备是否有新固件版本并执行升级。其逻辑如下：
+
+1. **最大重试机制**：最多重试 10 次，每次失败后延迟时间翻倍；
+2. **OTA 版本检查**：调用 `ota_.CheckVersion()` 检查是否有新版本；
+3. **有新版本时处理升级流程**：
+   - 弹出升级提示；
+   - 停止音频、清空队列；
+   - 启动 OTA 升级并显示进度；
+   - 升级失败则重启设备；
+4. **无新版本时处理激活逻辑**：
+   - 若有激活码则显示并等待用户输入；
+   - 调用 `ota_.Activate()` 进行激活，最多尝试 10 次。
+*/ 
 void Application::CheckNewVersion() {
     // 定义最大重试次数
     const int MAX_RETRY = 10;
@@ -227,7 +241,9 @@ void Application::CheckNewVersion() {
         }
     }
 }
-
+/*
+显示激活码并播放对应的语音提示。具体逻辑如下：
+*/
 void Application::ShowActivationCode() {
     auto& message = ota_.GetActivationMessage();
     auto& code = ota_.GetActivationCode();
@@ -261,6 +277,14 @@ void Application::ShowActivationCode() {
     }
 }
 
+/*
+该函数 `Application::Alert` 用于触发一个警告通知，功能如下：
+
+1. 使用日志记录警告信息（状态、消息和情绪）；
+2. 获取显示设备并设置状态、情绪和系统消息；
+3. 如果指定了声音，则重置音频解码器并播放声音。
+*/
+
 void Application::Alert(const char* status, const char* message, const char* emotion, const std::string_view& sound) {
     ESP_LOGW(TAG, "Alert %s: %s [%s]", status, message, emotion);
     auto display = Board::GetInstance().GetDisplay();
@@ -273,6 +297,13 @@ void Application::Alert(const char* status, const char* message, const char* emo
     }
 }
 
+/*
+该函数用于在设备空闲时关闭警告提示。具体功能如下：
+
+1. 检查设备状态是否为 [kDeviceStateIdle]（空闲状态）；
+2. 若是空闲状态，则获取显示实例，设置状态为“待机”、表情为“中性”、聊天消息为空。
+
+ */
 void Application::DismissAlert() {
     if (device_state_ == kDeviceStateIdle) {
         auto display = Board::GetInstance().GetDisplay();
@@ -281,7 +312,15 @@ void Application::DismissAlert() {
         display->SetChatMessage("system", "");
     }
 }
+/*
+该函数 Application::PlaySound 的作用是将一段音频数据解码并放入解码队列中播放，具体功能如下：
 
+等待前一个音频解码完成：通过条件变量 audio_decode_cv_ 阻塞直到音频解码队列为空。
+等待后台任务完成：确保当前没有正在运行的后台任务。
+设置解码参数：设定采样率为 16000Hz，帧时长为 60ms。
+解析输入音频数据：从 sound 中逐个提取 BinaryProtocol3 格式的包，读取负载数据并构造成 AudioStreamPacket。
+将音频包加入解码队列：加锁后将每个音频包添加到 audio_decode_queue_ 中供后续解码播放。
+*/
 void Application::PlaySound(const std::string_view& sound) {
     // Wait for the previous sound to finish
     {
@@ -311,6 +350,7 @@ void Application::PlaySound(const std::string_view& sound) {
     }
 }
 
+//提供一个安全的接口来切换聊天功能的状态：用户或系统的其他部分可以通过调用此函数来开启或关闭聊天功能。
 void Application::ToggleChatState() {
     if (device_state_ == kDeviceStateActivating) {
         SetDeviceState(kDeviceStateIdle);
@@ -467,8 +507,6 @@ void Application::StopListening() {
  * @note 此函数是应用程序启动过程的核心，负责编排各个模块的初始化和启动顺序。
  *       它大量使用了回调函数和事件驱动机制来处理异步操作。
  */
-
-
 
  void Application::Start() {
     // 获取单例对象
@@ -787,6 +825,10 @@ void Application::Schedule(std::function<void()> callback) {
 // The Main Event Loop controls the chat state and websocket connection
 // If other tasks need to access the websocket or chat state,
 // they should use Schedule to call this function
+// 主事件循环控制着聊天状态和 WebSocket 连接。
+// 如果其他任务需要访问 WebSocket 或聊天状态，
+// 它们应该使用 Schedule 来调用此函数。
+
 void Application::MainEventLoop() {
     while (true) {
         auto bits = xEventGroupWaitBits(event_group_, SCHEDULE_EVENT, pdTRUE, pdFALSE, portMAX_DELAY);

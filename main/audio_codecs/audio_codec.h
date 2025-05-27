@@ -27,6 +27,7 @@ public:
     void OutputData(std::vector<int16_t>& data);
     bool InputData(std::vector<int16_t>& data);
 
+   
     inline bool duplex() const { return duplex_; }
     inline bool input_reference() const { return input_reference_; }
     inline int input_sample_rate() const { return input_sample_rate_; }
