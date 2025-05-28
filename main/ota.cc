@@ -20,8 +20,12 @@
 #include <algorithm>
 
 #define TAG "Ota"
-
-
+//
+// Ota类构造函数
+// 功能：初始化Ota对象，读取OTA配置信息和设备序列号
+// 注意事项：该构造函数会优先从设置中读取OTA URL，若未设置则使用默认值
+//          在支持EFUSE的平台上会尝试从用户数据区读取序列号
+//
 Ota::Ota() {
     {
         Settings settings("wifi", false);
@@ -31,13 +35,17 @@ Ota::Ota() {
         }
     }
 
+
 #ifdef ESP_EFUSE_BLOCK_USR_DATA
-    // Read Serial Number from efuse user_data
+    // 从efuse用户数据区读取序列号
+    // 初始化33字节的缓冲区用于存储序列号（32字节有效数据+1个终止符）
     uint8_t serial_number[33] = {0};
+    // 尝试读取efuse中的用户数据
     if (esp_efuse_read_field_blob(ESP_EFUSE_USER_DATA, serial_number, 32 * 8) == ESP_OK) {
         if (serial_number[0] == 0) {
             has_serial_number_ = false;
         } else {
+            // 将二进制序列号转换为字符串格式并设置标志位
             serial_number_ = std::string(reinterpret_cast<char*>(serial_number), 32);
             has_serial_number_ = true;
         }
@@ -52,30 +60,59 @@ void Ota::SetHeader(const std::string& key, const std::string& value) {
     headers_[key] = value;
 }
 
+
+/**
+ * 设置HTTP对象以进行OTA更新
+ * 
+ * 此函数负责初始化和配置HTTP客户端，用于执行OTA（Over-The-Air）更新它根据设备的具体信息和应用程序的描述设置必要的HTTP头信息
+ * 
+ * @return 返回配置好的HTTP对象指针，用于执行OTA更新操作
+ */
 Http* Ota::SetupHttp() {
+    // 获取单板对象实例
     auto& board = Board::GetInstance();
+    // 获取应用程序描述信息
     auto app_desc = esp_app_get_description();
 
+    // 创建HTTP对象
     auto http = board.CreateHttp();
+    // 设置HTTP请求头信息，遍历预定义的头部信息并设置到HTTP对象中
     for (const auto& header : headers_) {
         http->SetHeader(header.first, header.second);
     }
 
+    // 根据设备是否有序列号设置激活版本
     http->SetHeader("Activation-Version", has_serial_number_ ? "2" : "1");
+    // 设置设备ID为设备的MAC地址
     http->SetHeader("Device-Id", SystemInfo::GetMacAddress().c_str());
+    // 设置客户端ID为单板的UUID
     http->SetHeader("Client-Id", board.GetUuid());
+    // 设置用户代理为板子名称和应用程序版本
     http->SetHeader("User-Agent", std::string(BOARD_NAME "/") + app_desc->version);
+    // 设置接受语言为系统预设的语言代码
     http->SetHeader("Accept-Language", Lang::CODE);
+    // 设置内容类型为JSON格式
     http->SetHeader("Content-Type", "application/json");
 
+    // 返回配置好的HTTP对象
     return http;
 }
 
+/**
+ * 检查是否有新的固件版本可用
+ * 通过HTTP请求版本检查URL获取最新版本信息，并与当前版本进行比较
+ * 
+ * @return bool 成功解析响应并完成版本检查返回true，否则返回false
+ */
 bool Ota::CheckVersion() {
     auto& board = Board::GetInstance();
     auto app_desc = esp_app_get_description();
 
-    // Check if there is a new firmware version available
+    /**
+     * 获取并记录当前固件版本
+     * 使用esp_app_get_description()获取应用程序描述信息
+     * 记录日志：当前固件版本
+     */
     current_version_ = app_desc->version;
     ESP_LOGI(TAG, "Current version: %s", current_version_.c_str());
 
@@ -86,6 +123,11 @@ bool Ota::CheckVersion() {
 
     auto http = SetupHttp();
 
+    /**
+     * 发送HTTP请求获取版本信息
+     * 根据是否有数据体选择POST或GET方法
+     * 失败时记录错误日志并清理资源
+     */
     std::string data = board.GetJson();
     std::string method = data.length() > 0 ? "POST" : "GET";
     if (!http->Open(method, check_version_url_, data)) {
@@ -109,6 +151,11 @@ bool Ota::CheckVersion() {
 
     has_activation_code_ = false;
     has_activation_challenge_ = false;
+    /**
+     * 解析JSON响应中的激活信息
+     * 提取message、code和challenge字段（如果存在）
+     * 设置对应的成员变量和标志位
+     */
     cJSON *activation = cJSON_GetObjectItem(root, "activation");
     if (activation != NULL) {
         cJSON* message = cJSON_GetObjectItem(activation, "message");
@@ -132,6 +179,11 @@ bool Ota::CheckVersion() {
     }
 
     has_mqtt_config_ = false;
+    /**
+     * 解析JSON响应中的MQTT配置信息
+     * 如果存在，使用Settings类保存配置值
+     * 设置has_mqtt_config_标志位为true
+     */
     cJSON *mqtt = cJSON_GetObjectItem(root, "mqtt");
     if (mqtt != NULL) {
         Settings settings("mqtt", true);
@@ -149,6 +201,12 @@ bool Ota::CheckVersion() {
     }
 
     has_websocket_config_ = false;
+    /**
+     * 解析JSON响应中的WebSocket配置信息
+     * 如果存在，使用Settings类保存配置值
+     * 支持字符串和数字类型
+     * 设置has_websocket_config_标志位为true
+     */
     cJSON *websocket = cJSON_GetObjectItem(root, "websocket");
     if (websocket != NULL) {
         Settings settings("websocket", true);
@@ -166,6 +224,11 @@ bool Ota::CheckVersion() {
     }
 
     has_server_time_ = false;
+    /**
+     * 解析JSON响应中的服务器时间信息
+     * 如果存在timestamp字段，设置系统时间
+     * 如果有时区偏移，进行相应的时间调整
+     */
     cJSON *server_time = cJSON_GetObjectItem(root, "server_time");
     if (server_time != NULL) {
         cJSON *timestamp = cJSON_GetObjectItem(server_time, "timestamp");
@@ -191,6 +254,12 @@ bool Ota::CheckVersion() {
     }
 
     has_new_version_ = false;
+    /**
+     * 解析JSON响应中的固件版本信息
+     * 提取version和url字段
+     * 比较当前版本和新版本，确定是否有可用更新
+     * 如果有force标志且为1，则强制标记为有新版本
+     */
     cJSON *firmware = cJSON_GetObjectItem(root, "firmware");
     if (firmware != NULL) {
         cJSON *version = cJSON_GetObjectItem(firmware, "version");
