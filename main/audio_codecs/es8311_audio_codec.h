@@ -88,5 +88,5 @@ public:
     // 析构函数
     virtual ~Es8311AudioCodec();
 
-
+ }
 #endif // _ES8311_AUDIO_CODEC_H
