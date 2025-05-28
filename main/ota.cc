@@ -20,7 +20,7 @@
 #include <algorithm>
 
 #define TAG "Ota"
-//
+  //
 // Ota类构造函数
 // 功能：初始化Ota对象，读取OTA配置信息和设备序列号
 // 注意事项：该构造函数会优先从设置中读取OTA URL，若未设置则使用默认值
